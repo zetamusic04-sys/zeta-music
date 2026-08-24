@@ -1,7 +1,7 @@
 {
   "name": "Zeta Music",
   "short_name": "ZM",
-  "description": "Zeta Music (ZM) — reproductor de música",
+  "description": "Zeta Music (ZM) — reproductor de música web, ligero y sin servidor.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -318,9 +318,21 @@ function bindSettings() {
       branch: $("#cfg-branch").value.trim() || "main",
       musicPath: $("#cfg-path").value.trim() || "music",
     };
+
+    if (!newCfg.owner || !newCfg.repo) {
+      $("#cfg-hint").textContent = "Escribe al menos el usuario y el repositorio de GitHub.";
+      return;
+    }
+
     saveConfig(newCfg);
     sessionStorage.clear(); // limpia caché de la API de GitHub
-    await initLibrary("github");
+    $("#cfg-hint").textContent = "Escaneando…";
+    try {
+      await initLibrary("github");
+      $("#cfg-hint").textContent = `Listo: se encontraron ${ZM.playlists.length} carpeta(s).`;
+    } catch (err) {
+      $("#cfg-hint").textContent = err.message || "No se pudo escanear el repositorio.";
+    }
   });
 
   $("#cfg-local-btn").addEventListener("click", async () => {
