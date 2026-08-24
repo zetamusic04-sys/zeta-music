@@ -5,10 +5,10 @@
 // o rellenarlo aquí para que ya venga listo al abrir la app.
 
 const DEFAULT_CONFIG = {
-  owner: "",        // usuario u organización de GitHub, p. ej. "tu-usuario"
-  repo: "",          // nombre del repositorio, p. ej. "zeta-music"
-  branch: "main",    // rama donde están subidas las canciones
-  musicPath: "music" // carpeta raíz del repo donde viven las playlists (subcarpetas)
+  owner: "zetamusic04-sys", // usuario u organización de GitHub
+  repo: "zeta-music",        // nombre del repositorio
+  branch: "main",            // rama donde están subidas las canciones
+  musicPath: "music"         // carpeta raíz del repo donde viven las playlists (subcarpetas)
 };
 
 const AUDIO_EXTENSIONS = ["mp3", "flac", "ogg", "oga", "wav", "m4a", "aac", "opus", "weba"];

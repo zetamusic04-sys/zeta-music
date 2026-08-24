@@ -130,7 +130,7 @@ function renderTrackRows(tbody, tracks, playlist, emptyElSelector) {
       <td class="col-idx">${i + 1}</td>
       <td class="col-art">${trackIconOrCover(t)}</td>
       <td class="col-title track-title-cell">
-        <div class="t">${escapeHtml(t.title || t.filename)}</div>
+        <div class="t">${t.looksEncoded ? '<i class="ri-error-warning-line warn-icon" title="Este nombre de archivo parece mal codificado (contiene %20, %C3%A1, etc). Puede fallar al reproducirse — renómbralo en GitHub quitando esos códigos."></i> ' : ""}${escapeHtml(t.title || t.filename)}</div>
         <div class="a">${escapeHtml(t.artist || "")}${t.playlistName ? " · " + escapeHtml(t.playlistName) : ""}</div>
       </td>
       <td class="col-album">${escapeHtml(t.album || "")}</td>
@@ -161,7 +161,9 @@ function renderTrackRows(tbody, tracks, playlist, emptyElSelector) {
 function updateTrackRow(track) {
   const row = document.querySelector(`.track-row[data-id="${CSS.escape(track.id)}"]`);
   if (!row) return;
-  row.querySelector(".track-title-cell .t").textContent = track.title || track.filename;
+  const titleEl = row.querySelector(".track-title-cell .t");
+  const warnIcon = track.looksEncoded ? '<i class="ri-error-warning-line warn-icon" title="Este nombre de archivo parece mal codificado (contiene %20, %C3%A1, etc). Puede fallar al reproducirse — renómbralo en GitHub quitando esos códigos."></i> ' : "";
+  titleEl.innerHTML = warnIcon + escapeHtml(track.title || track.filename);
   const aEl = row.querySelector(".track-title-cell .a");
   const plName = aEl.textContent.includes(" · ") ? " · " + aEl.textContent.split(" · ")[1] : "";
   aEl.textContent = (track.artist || "") + plName;
@@ -257,33 +259,110 @@ function bindPlayerBar() {
   setVolume(0.9);
 
   document.addEventListener("zm:trackchange", (e) => {
-    const { track } = e.detail;
+    const { track, playlist } = e.detail;
     $("#np-title").textContent = track.title || track.filename;
     $("#np-artist").textContent = track.artist || "";
     $("#np-cover").innerHTML = track.cover ? `<img src="${track.cover}" alt="">` : '<i class="ri-music-2-fill"></i>';
     document.title = `${track.title || track.filename} · Zeta Music`;
     highlightPlayingRow();
     if (!$("#view-queue").hidden) renderQueueView();
+
+    $("#np-full-title").textContent = track.title || track.filename;
+    $("#np-full-artist").textContent = track.artist || "";
+    $("#np-cover-large").innerHTML = track.cover ? `<img src="${track.cover}" alt="">` : '<i class="ri-music-2-fill"></i>';
+    $("#np-full-playlist").textContent = playlist ? playlist.name : "";
+    loadLyricsForTrack(track);
   });
 
   document.addEventListener("zm:playstate", (e) => {
-    const icon = $("#play-btn i");
-    icon.className = e.detail.playing ? "ri-pause-fill" : "ri-play-fill";
+    const cls = e.detail.playing ? "ri-pause-fill" : "ri-play-fill";
+    $("#play-btn i").className = cls;
+    $("#np-play-btn i").className = cls;
   });
 
   document.addEventListener("zm:timeupdate", (e) => {
     const { current, duration } = e.detail;
     $("#cur-time").textContent = formatTime(current);
     $("#dur-time").textContent = formatTime(duration);
-    if (!isSeeking) seekBar.value = duration ? Math.round((current / duration) * 1000) : 0;
+    $("#np-full-cur").textContent = formatTime(current);
+    $("#np-full-dur").textContent = formatTime(duration);
+    const pct = duration ? Math.round((current / duration) * 1000) : 0;
+    if (!isSeeking) seekBar.value = pct;
+    if (!isFullSeeking) $("#np-full-seek").value = pct;
   });
 
-  document.addEventListener("zm:shufflechange", (e) => $("#shuffle-btn").classList.toggle("active", e.detail.shuffle));
-  document.addEventListener("zm:repeatchange", (e) => {
-    const btn = $("#repeat-btn");
-    btn.classList.toggle("active", e.detail.repeat !== "off");
-    btn.querySelector("i").className = e.detail.repeat === "one" ? "ri-repeat-one-line" : "ri-repeat-line";
+  document.addEventListener("zm:shufflechange", (e) => {
+    $("#shuffle-btn").classList.toggle("active", e.detail.shuffle);
+    $("#np-shuffle-btn").classList.toggle("active", e.detail.shuffle);
   });
+  document.addEventListener("zm:repeatchange", (e) => {
+    const iconClass = e.detail.repeat === "one" ? "ri-repeat-one-line" : "ri-repeat-line";
+    const active = e.detail.repeat !== "off";
+    $("#repeat-btn").classList.toggle("active", active);
+    $("#repeat-btn").querySelector("i").className = iconClass;
+    $("#np-repeat-btn").classList.toggle("active", active);
+    $("#np-repeat-btn").querySelector("i").className = iconClass;
+  });
+
+  document.addEventListener("zm:trackerror", (e) => {
+    const row = document.querySelector(`.track-row[data-id="${CSS.escape(e.detail.track.id)}"]`);
+    if (row) row.classList.add("row-broken");
+  });
+}
+
+/* ============ Vista "Reproduciendo ahora" (portada grande + letra) ============ */
+
+let isFullSeeking = false;
+
+function bindNowPlayingOverlay() {
+  const overlay = $("#nowplaying-overlay");
+
+  $("#now-playing-trigger").addEventListener("click", () => {
+    if (!currentTrack()) return;
+    overlay.classList.add("open");
+  });
+  $("#np-close-btn").addEventListener("click", () => overlay.classList.remove("open"));
+
+  $("#np-play-btn").addEventListener("click", togglePlay);
+  $("#np-prev-btn").addEventListener("click", prev);
+  $("#np-next-btn").addEventListener("click", () => next(false));
+  $("#np-shuffle-btn").addEventListener("click", toggleShuffle);
+  $("#np-repeat-btn").addEventListener("click", cycleRepeat);
+
+  const seekBar = $("#np-full-seek");
+  seekBar.addEventListener("pointerdown", () => isFullSeeking = true);
+  seekBar.addEventListener("change", () => {
+    seekTo(seekBar.value / 1000);
+    isFullSeeking = false;
+  });
+}
+
+async function loadLyricsForTrack(track) {
+  const el = $("#np-lyrics-body");
+  if (!track) { el.textContent = "Elige una canción para ver su letra."; return; }
+
+  if (track.lyrics) { el.textContent = track.lyrics; return; }
+
+  if (!track.lyricsUrl) {
+    el.textContent = "No se encontró letra para esta canción.\n\nTip: si el MP3 tiene una etiqueta de letra (USLT) la app la detecta sola. También puedes subir un archivo .lrc o .txt con el mismo nombre que la canción, en la misma carpeta.";
+    return;
+  }
+
+  el.textContent = "Cargando letra…";
+  try {
+    const res = await fetch(track.lyricsUrl);
+    if (!res.ok) throw new Error();
+    const text = (await res.text()).trim();
+    // si el usuario cambió de canción mientras se cargaba, no pisar la letra correcta
+    if (currentTrack() && currentTrack().id === track.id) {
+      el.textContent = text || "El archivo de letra está vacío.";
+      track.lyrics = text || null;
+    }
+  } catch (e) {
+    if (currentTrack() && currentTrack().id === track.id) {
+      el.textContent = "No se pudo cargar el archivo de letra.";
+    }
+  }
 }
 
 /* ============ Navegación lateral / móvil ============ */

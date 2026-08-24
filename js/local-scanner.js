@@ -16,17 +16,17 @@ async function scanLocalViaFSA(rootHandle) {
   const looseFiles = [];
 
   for await (const [name, handle] of rootHandle.entries()) {
-    if (handle.kind === "file" && isAudioFile(name)) {
+    if (handle.kind === "file" && (isAudioFile(name) || /\.(lrc|txt)$/i.test(name))) {
       looseFiles.push(await handle.getFile());
     } else if (handle.kind === "directory") {
       const files = [];
       for await (const [fname, fhandle] of handle.entries()) {
-        if (fhandle.kind === "file" && isAudioFile(fname)) files.push(await fhandle.getFile());
+        if (fhandle.kind === "file" && (isAudioFile(fname) || /\.(lrc|txt)$/i.test(fname))) files.push(await fhandle.getFile());
       }
-      if (files.length) playlists.push(buildLocalPlaylist(name, files));
+      if (files.some(f => isAudioFile(f.name))) playlists.push(buildLocalPlaylist(name, files));
     }
   }
-  if (looseFiles.length) playlists.unshift(buildLocalPlaylist(rootHandle.name || "Música", looseFiles));
+  if (looseFiles.some(f => isAudioFile(f.name))) playlists.unshift(buildLocalPlaylist(rootHandle.name || "Música", looseFiles));
   return playlists;
 }
 
@@ -37,8 +37,8 @@ function scanLocalViaInput() {
     input.webkitdirectory = true;
     input.multiple = true;
     input.onchange = () => {
-      const files = Array.from(input.files).filter(f => isAudioFile(f.name));
-      if (!files.length) return reject(new Error("No se encontraron canciones en esa carpeta."));
+      const files = Array.from(input.files).filter(f => isAudioFile(f.name) || /\.(lrc|txt)$/i.test(f.name));
+      if (!files.some(f => isAudioFile(f.name))) return reject(new Error("No se encontraron canciones en esa carpeta."));
 
       const groups = new Map();
       for (const f of files) {
@@ -48,19 +48,31 @@ function scanLocalViaInput() {
         if (!groups.has(folder)) groups.set(folder, []);
         groups.get(folder).push(f);
       }
-      resolve(Array.from(groups.entries()).map(([name, files]) => buildLocalPlaylist(name, files)));
+      resolve(Array.from(groups.entries()).filter(([, fs]) => fs.some(f => isAudioFile(f.name))).map(([name, fs]) => buildLocalPlaylist(name, fs)));
     };
     input.click();
   });
 }
 
+function basenameNoExtLocal(filename) {
+  return filename.replace(/\.[^/.]+$/, "").toLowerCase();
+}
+
 function buildLocalPlaylist(name, files) {
-  const tracks = files.map(file => ({
-    id: `local/${name}/${file.name}`,
-    filename: file.name,
-    url: URL.createObjectURL(file),
-    fileRef: file,
-    title: null, artist: null, album: null, cover: null, duration: null,
-  }));
+  const audioFiles = files.filter(f => isAudioFile(f.name));
+  const lyricFiles = files.filter(f => /\.(lrc|txt)$/i.test(f.name));
+  const lyricsByBase = new Map(lyricFiles.map(f => [basenameNoExtLocal(f.name), f]));
+
+  const tracks = audioFiles.map(file => {
+    const lyricMatch = lyricsByBase.get(basenameNoExtLocal(file.name));
+    return {
+      id: `local/${name}/${file.name}`,
+      filename: file.name,
+      url: URL.createObjectURL(file),
+      fileRef: file,
+      lyricsUrl: lyricMatch ? URL.createObjectURL(lyricMatch) : null,
+      title: null, artist: null, album: null, cover: null, duration: null, lyrics: null,
+    };
+  });
   return { id: `local/${name}`, name, source: "local", path: name, tracks };
 }

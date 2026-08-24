@@ -108,6 +108,13 @@ function setVolume(v) {
 audioEl.addEventListener("play", () => emit("zm:playstate", { playing: true }));
 audioEl.addEventListener("pause", () => emit("zm:playstate", { playing: false }));
 audioEl.addEventListener("ended", () => next(true));
+audioEl.addEventListener("error", () => {
+  const track = currentTrack();
+  if (!track) return;
+  emit("zm:trackerror", { track });
+  console.warn(`Zeta Music: no se pudo cargar "${track.filename}" — saltando a la siguiente.`);
+  next(true);
+});
 audioEl.addEventListener("timeupdate", () => emit("zm:timeupdate", { current: audioEl.currentTime, duration: audioEl.duration || 0 }));
 audioEl.addEventListener("loadedmetadata", () => {
   const track = currentTrack();

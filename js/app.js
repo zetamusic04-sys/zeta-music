@@ -16,8 +16,17 @@ window.addEventListener("appinstalled", () => {
 document.addEventListener("DOMContentLoaded", async () => {
   bindNav();
   bindPlayerBar();
+  bindNowPlayingOverlay();
   bindSettings();
   bindRescan();
+
+  // Mide el alto real de la barra del reproductor (varía en Android/PWA
+  // por los controles apilados y el gesto inferior) para que la última
+  // canción de cada lista nunca quede tapada.
+  const playerBar = document.getElementById("player-bar");
+  const syncPlayerHeight = () => document.documentElement.style.setProperty("--player-h-live", playerBar.offsetHeight + "px");
+  if (window.ResizeObserver) new ResizeObserver(syncPlayerHeight).observe(playerBar);
+  syncPlayerHeight();
 
   $("#install-btn").addEventListener("click", async () => {
     if (!deferredInstallPrompt) return;

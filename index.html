@@ -140,13 +140,13 @@
 
 <!-- ===== Reproductor inferior ===== -->
 <footer class="player-bar" id="player-bar">
-  <div class="now-playing">
+  <button class="now-playing" id="now-playing-trigger">
     <div class="cover" id="np-cover"><i class="ri-music-2-fill"></i></div>
     <div class="np-text">
       <div class="np-title" id="np-title">Nada en reproducción</div>
       <div class="np-artist" id="np-artist">Elige una canción</div>
     </div>
-  </div>
+  </button>
 
   <div class="player-center">
     <div class="player-controls">
@@ -170,6 +170,43 @@
 </footer>
 
 <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<!-- ===== Vista "Reproduciendo ahora" (portada grande + letra) ===== -->
+<div class="nowplaying-overlay" id="nowplaying-overlay">
+  <div class="np-full-header">
+    <button class="icon-btn" id="np-close-btn"><i class="ri-arrow-down-s-line"></i></button>
+    <div class="np-full-header-text">
+      <div class="np-full-eyebrow">Reproduciendo desde</div>
+      <div class="np-full-playlist" id="np-full-playlist">—</div>
+    </div>
+    <span class="icon-btn" style="visibility:hidden"><i class="ri-arrow-down-s-line"></i></span>
+  </div>
+
+  <div class="np-full-body">
+    <div class="np-cover-large" id="np-cover-large"><i class="ri-music-2-fill"></i></div>
+    <div class="np-full-title" id="np-full-title">Nada en reproducción</div>
+    <div class="np-full-artist" id="np-full-artist">Elige una canción</div>
+
+    <div class="np-full-progress">
+      <span class="time" id="np-full-cur">0:00</span>
+      <input type="range" id="np-full-seek" min="0" max="1000" value="0">
+      <span class="time" id="np-full-dur">0:00</span>
+    </div>
+
+    <div class="np-full-controls">
+      <button class="icon-btn" id="np-shuffle-btn" title="Aleatorio"><i class="ri-shuffle-line"></i></button>
+      <button class="icon-btn" id="np-prev-btn" title="Anterior"><i class="ri-skip-back-mini-fill"></i></button>
+      <button class="icon-btn play-btn big" id="np-play-btn" title="Reproducir"><i class="ri-play-fill"></i></button>
+      <button class="icon-btn" id="np-next-btn" title="Siguiente"><i class="ri-skip-forward-mini-fill"></i></button>
+      <button class="icon-btn" id="np-repeat-btn" title="Repetir"><i class="ri-repeat-line"></i></button>
+    </div>
+
+    <div class="np-lyrics-section">
+      <div class="np-lyrics-title"><i class="ri-file-text-line"></i> Letra</div>
+      <div class="np-lyrics-body" id="np-lyrics-body">Elige una canción para ver su letra.</div>
+    </div>
+  </div>
+</div>
 
 <audio id="audio" preload="metadata"></audio>
 

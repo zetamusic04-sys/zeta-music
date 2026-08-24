@@ -36,32 +36,49 @@ async function scanGithubLibrary(cfg, onProgress) {
   }
   const root = await ghApi(cfg.musicPath, cfg);
   const folders = root.filter(e => e.type === "dir");
-  const looseFiles = root.filter(e => e.type === "file" && isAudioFile(e.name));
+  const looseAudio = root.filter(e => e.type === "file" && isAudioFile(e.name));
 
   const playlists = [];
 
-  if (looseFiles.length) {
-    playlists.push(await buildPlaylistFromEntries("Música", cfg.musicPath, looseFiles, cfg, onProgress));
+  if (looseAudio.length) {
+    playlists.push(buildPlaylistFromEntries("Música", cfg.musicPath, root, cfg));
   }
 
   for (const folder of folders) {
     onProgress && onProgress(`Leyendo "${folder.name}"…`);
     const entries = await ghApi(`${cfg.musicPath}/${folder.name}`, cfg);
-    const audioEntries = entries.filter(e => e.type === "file" && isAudioFile(e.name));
-    if (!audioEntries.length) continue;
-    playlists.push(await buildPlaylistFromEntries(folder.name, `${cfg.musicPath}/${folder.name}`, audioEntries, cfg, onProgress));
+    if (!entries.some(e => e.type === "file" && isAudioFile(e.name))) continue;
+    playlists.push(buildPlaylistFromEntries(folder.name, `${cfg.musicPath}/${folder.name}`, entries, cfg));
   }
 
   return playlists;
 }
 
-async function buildPlaylistFromEntries(name, path, entries, cfg, onProgress) {
-  const tracks = entries.map(e => ({
-    id: `${path}/${e.name}`,
-    filename: e.name,
-    url: rawUrl(cfg, `${path}/${e.name}`),
-    title: null, artist: null, album: null, cover: null, duration: null,
-  }));
+function basenameNoExt(filename) {
+  return filename.replace(/\.[^/.]+$/, "").toLowerCase();
+}
+
+/**
+ * Construye una playlist a partir de TODOS los archivos de una carpeta
+ * (no sólo audio): así puede emparejar cada canción con una letra
+ * (.lrc o .txt) que tenga el mismo nombre de archivo, si existe.
+ */
+function buildPlaylistFromEntries(name, path, allEntries, cfg) {
+  const audioEntries = allEntries.filter(e => e.type === "file" && isAudioFile(e.name));
+  const lyricEntries = allEntries.filter(e => e.type === "file" && /\.(lrc|txt)$/i.test(e.name));
+  const lyricsByBase = new Map(lyricEntries.map(e => [basenameNoExt(e.name), e]));
+
+  const tracks = audioEntries.map(e => {
+    const lyricMatch = lyricsByBase.get(basenameNoExt(e.name));
+    return {
+      id: `${path}/${e.name}`,
+      filename: e.name,
+      url: rawUrl(cfg, `${path}/${e.name}`),
+      lyricsUrl: lyricMatch ? rawUrl(cfg, `${path}/${lyricMatch.name}`) : null,
+      title: null, artist: null, album: null, cover: null, duration: null, lyrics: null,
+      looksEncoded: /%[0-9A-Fa-f]{2}/.test(e.name),
+    };
+  });
 
   return { id: path, name, source: "github", path, tracks };
 }

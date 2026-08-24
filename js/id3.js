@@ -63,7 +63,7 @@ function readID3v2(bytes) {
   }
 
   const end = Math.min(bytes.length, 10 + tagSize);
-  const tags = { title: null, artist: null, album: null, cover: null, trackNo: null };
+  const tags = { title: null, artist: null, album: null, cover: null, trackNo: null, lyrics: null };
 
   while (offset + 10 <= end) {
     const id = String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
@@ -86,6 +86,7 @@ function readID3v2(bytes) {
       else if (id === "TALB") tags.album = trimNulls(decodeText(frameBytes.slice(1), frameBytes[0]));
       else if (id === "TRCK") tags.trackNo = trimNulls(decodeText(frameBytes.slice(1), frameBytes[0])).split("/")[0];
       else if (id === "APIC" && !tags.cover) tags.cover = parseAPIC(frameBytes);
+      else if (id === "USLT" && !tags.lyrics) tags.lyrics = parseUSLT(frameBytes);
     } catch (e) { /* frame corrupta, seguimos */ }
 
     offset = frameEnd;
@@ -93,11 +94,16 @@ function readID3v2(bytes) {
   return tags;
 }
 
+// Sólo se aceptan estos tipos de imagen: cualquier otro valor (incluido
+// texto malicioso intentando romper el atributo src="") se descarta.
+const SAFE_IMAGE_MIME = /^image\/(jpeg|jpg|png|gif|webp|bmp)$/i;
+
 function parseAPIC(frameBytes) {
   const encoding = frameBytes[0];
   let i = 1;
   let mime = "";
-  while (i < frameBytes.length && frameBytes[i] !== 0) { mime += String.fromCharCode(frameBytes[i]); i++; }
+  while (i < frameBytes.length && frameBytes[i] !== 0 && mime.length < 32) { mime += String.fromCharCode(frameBytes[i]); i++; }
+  while (i < frameBytes.length && frameBytes[i] !== 0) i++; // por si el mime venía cortado, avanzar hasta el null real
   i++; // saltar null
   i++; // saltar picture type byte
   // saltar descripción (posiblemente UTF-16, terminador de 2 bytes)
@@ -109,8 +115,26 @@ function parseAPIC(frameBytes) {
     i++;
   }
   const imgBytes = frameBytes.slice(i);
-  if (!mime || imgBytes.length < 20) return null;
-  return bytesToDataURL(imgBytes, mime || "image/jpeg");
+  if (imgBytes.length < 20) return null;
+  const safeMime = SAFE_IMAGE_MIME.test(mime.trim()) ? mime.trim().toLowerCase() : "image/jpeg";
+  return bytesToDataURL(imgBytes, safeMime);
+}
+
+function parseUSLT(frameBytes) {
+  const encoding = frameBytes[0];
+  let i = 4; // 1 byte encoding + 3 bytes de idioma
+  // saltar descripción corta (encoding-dependiente, terminador null)
+  if (encoding === 1 || encoding === 2) {
+    while (i < frameBytes.length - 1 && !(frameBytes[i] === 0 && frameBytes[i + 1] === 0)) i += 2;
+    i += 2;
+  } else {
+    while (i < frameBytes.length && frameBytes[i] !== 0) i++;
+    i++;
+  }
+  const lyricsBytes = frameBytes.slice(i);
+  if (!lyricsBytes.length) return null;
+  const text = trimNulls(decodeText(lyricsBytes, encoding));
+  return text || null;
 }
 
 function bytesToDataURL(bytes, mime) {
@@ -165,6 +189,7 @@ async function readAudioMetadata(source, filename) {
       artist: tags.artist || fallback.artist || "Artista desconocido",
       album: tags.album || "—",
       cover: tags.cover || null,
+      lyrics: tags.lyrics || null,
     };
   } catch (e) {
     return { ...fallback, artist: fallback.artist || "Artista desconocido", album: "—", cover: null };
