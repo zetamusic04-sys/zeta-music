@@ -108,11 +108,19 @@ function setVolume(v) {
 audioEl.addEventListener("play", () => emit("zm:playstate", { playing: true }));
 audioEl.addEventListener("pause", () => emit("zm:playstate", { playing: false }));
 audioEl.addEventListener("ended", () => next(true));
+const MEDIA_ERROR_NAMES = { 1: "ABORTED", 2: "NETWORK", 3: "DECODE", 4: "SRC_NOT_SUPPORTED" };
+
 audioEl.addEventListener("error", () => {
   const track = currentTrack();
   if (!track) return;
+  const err = audioEl.error;
+  const codeName = err ? (MEDIA_ERROR_NAMES[err.code] || `código ${err.code}`) : "desconocido";
+  console.warn(`Zeta Music: no se pudo cargar "${track.filename}" (${codeName}) — saltando a la siguiente.`);
+  console.warn("URL que falló:", track.url);
+  if (codeName === "NETWORK" || codeName === "SRC_NOT_SUPPORTED") {
+    console.warn("Sugerencia: abre esa URL directo en una pestaña nueva. Si ahí tampoco carga, probablemente algo en el navegador/red (bloqueador de anuncios, antivirus, firewall) está filtrando raw.githubusercontent.com.");
+  }
   emit("zm:trackerror", { track });
-  console.warn(`Zeta Music: no se pudo cargar "${track.filename}" — saltando a la siguiente.`);
   next(true);
 });
 audioEl.addEventListener("timeupdate", () => emit("zm:timeupdate", { current: audioEl.currentTime, duration: audioEl.duration || 0 }));
