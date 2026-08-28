@@ -16,13 +16,26 @@ const AUDIO_EXTENSIONS = ["mp3", "flac", "ogg", "oga", "wav", "m4a", "aac", "opu
 function getConfig() {
   try {
     const saved = JSON.parse(localStorage.getItem("zm_config") || "null");
-    if (saved) return { ...DEFAULT_CONFIG, ...saved };
+    if (saved) return normalizeConfig({ ...DEFAULT_CONFIG, ...saved });
   } catch (e) { /* ignore corrupt config */ }
-  return { ...DEFAULT_CONFIG };
+  return normalizeConfig({ ...DEFAULT_CONFIG });
+}
+
+// Quita barras sobrantes en owner/repo/branch/musicPath para que nunca
+// se generen URLs con "//" (esto rompía la reproducción en desktop
+// cuando alguien guardaba, por ejemplo, "music/" con la barra al final).
+function normalizeConfig(cfg) {
+  const strip = (s) => (s || "").trim().replace(/^\/+/, "").replace(/\/+$/, "");
+  return {
+    owner: strip(cfg.owner),
+    repo: strip(cfg.repo),
+    branch: strip(cfg.branch) || "main",
+    musicPath: strip(cfg.musicPath) || "music",
+  };
 }
 
 function saveConfig(cfg) {
-  localStorage.setItem("zm_config", JSON.stringify(cfg));
+  localStorage.setItem("zm_config", JSON.stringify(normalizeConfig(cfg)));
 }
 
 function isAudioFile(filename) {

@@ -6,7 +6,8 @@
 const ZM_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 async function ghApi(path, cfg) {
-  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}?ref=${encodeURIComponent(cfg.branch)}`;
+  const cleanPath = path.replace(/\/+/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cleanPath}?ref=${encodeURIComponent(cfg.branch)}`;
   const cacheKey = "zm_gh_cache_" + url;
   const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
   if (cached && Date.now() - cached.t < ZM_CACHE_TTL) return cached.data;
@@ -23,7 +24,8 @@ async function ghApi(path, cfg) {
 }
 
 function rawUrl(cfg, path) {
-  return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${path}`;
+  const cleanPath = path.replace(/\/+/g, "/").replace(/^\/+/, "");
+  return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${cleanPath}`;
 }
 
 /**
