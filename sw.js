@@ -2,8 +2,16 @@
 // Sólo cachea el "app shell" (HTML/CSS/JS/íconos). Las canciones NO se
 // cachean aquí a propósito: son archivos grandes y suelen venir de
 // raw.githubusercontent.com, así que se piden siempre en directo.
+//
+// Estrategia: RED PRIMERO, caché sólo de respaldo sin conexión. Antes
+// era "caché primero", lo que significaba que una vez guardada una
+// versión, el navegador podía seguir sirviéndola indefinidamente aunque
+// subiéramos código nuevo — el clásico problema de "la PWA no se
+// actualiza nunca". Con red primero, cualquier visita con conexión
+// siempre pide la versión más nueva; sólo se usa la copia guardada si
+// de plano no hay red.
 
-const CACHE_NAME = "zeta-music-shell-v2";
+const CACHE_NAME = "zeta-music-shell-v3";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -51,9 +59,12 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).catch(() => cached);
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        const copy = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+        return networkResponse;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

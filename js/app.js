@@ -34,6 +34,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const syncPlayerHeight = () => document.documentElement.style.setProperty("--player-h-live", playerBar.offsetHeight + "px");
   if (window.ResizeObserver) new ResizeObserver(syncPlayerHeight).observe(playerBar);
   syncPlayerHeight();
+  // Redes de seguridad extra: fuentes/íconos pueden asentar el layout un
+  // poco después del primer pintado, así que recalculamos varias veces.
+  window.addEventListener("load", syncPlayerHeight);
+  window.addEventListener("resize", syncPlayerHeight);
+  window.addEventListener("orientationchange", syncPlayerHeight);
+  setTimeout(syncPlayerHeight, 400);
+  setTimeout(syncPlayerHeight, 1200);
 
   $("#install-btn").addEventListener("click", async () => {
     if (deferredInstallPrompt) {
@@ -63,6 +70,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
+    // Cuando un service worker nuevo toma control (versión actualizada),
+    // recargamos una sola vez para asegurar que se use el código nuevo
+    // de inmediato, sin depender de que la persona haga un refresco manual.
+    let zmSwRefreshed = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (zmSwRefreshed) return;
+      zmSwRefreshed = true;
+      window.location.reload();
+    });
   }
 
   bindKeyboardShortcuts();
@@ -89,11 +105,13 @@ function bindKeyboardShortcuts() {
         e.preventDefault();
         audioEl.volume = Math.min(1, audioEl.volume + 0.05);
         $("#volume-bar").value = Math.round(audioEl.volume * 100);
+        localStorage.setItem("zm_volume", audioEl.volume);
         break;
       case "ArrowDown":
         e.preventDefault();
         audioEl.volume = Math.max(0, audioEl.volume - 0.05);
         $("#volume-bar").value = Math.round(audioEl.volume * 100);
+        localStorage.setItem("zm_volume", audioEl.volume);
         break;
     }
   });

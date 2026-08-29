@@ -335,8 +335,16 @@ function bindPlayerBar() {
     isSeeking = false;
   });
 
-  $("#volume-bar").addEventListener("input", (e) => setVolume(e.target.value / 100));
-  setVolume(0.9);
+  $("#volume-bar").addEventListener("input", (e) => {
+    const v = e.target.value / 100;
+    setVolume(v);
+    localStorage.setItem("zm_volume", v);
+  });
+  // Recuerda el volumen entre sesiones: antes siempre abría al 90%.
+  const savedVolume = parseFloat(localStorage.getItem("zm_volume"));
+  const initialVolume = isNaN(savedVolume) ? 0.8 : Math.min(1, Math.max(0, savedVolume));
+  setVolume(initialVolume);
+  $("#volume-bar").value = Math.round(initialVolume * 100);
 
   document.addEventListener("zm:trackchange", (e) => {
     const { track, playlist } = e.detail;
@@ -422,13 +430,24 @@ function bindNowPlayingOverlay() {
   });
 }
 
+function showLyricsEmptyState(headline, detail) {
+  const el = $("#np-lyrics-body");
+  el.classList.remove("synced");
+  el.innerHTML = `
+    <div class="np-lyrics-empty">
+      <i class="ri-file-text-line"></i>
+      <p>${escapeHtml(headline)}</p>
+      ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
+    </div>`;
+}
+
 async function loadLyricsForTrack(track) {
   const el = $("#np-lyrics-body");
   currentLyricsLines = null;
   lastActiveLyricIndex = -1;
   el.classList.remove("synced");
 
-  if (!track) { el.textContent = "Elige una canción para ver su letra."; return; }
+  if (!track) { showLyricsEmptyState("Elige una canción para ver su letra."); return; }
 
   const applyText = (text) => {
     const parsed = parseLRC(text);
@@ -436,20 +455,26 @@ async function loadLyricsForTrack(track) {
       currentLyricsLines = parsed;
       renderLyricsLines(parsed);
       updateLyricsHighlight(audioEl.currentTime);
-    } else {
+    } else if ((text || "").trim()) {
       el.classList.remove("synced");
-      el.textContent = (text || "").trim() || "El archivo de letra está vacío.";
+      el.textContent = text.trim();
+    } else {
+      showLyricsEmptyState("El archivo de letra está vacío.");
     }
   };
 
   if (track.lyrics) { applyText(track.lyrics); return; }
 
   if (!track.lyricsUrl) {
-    el.textContent = "No se encontró letra para esta canción.\n\nTip: si el MP3 tiene una etiqueta de letra (USLT) la app la detecta sola. También puedes subir un archivo .lrc (con marcas de tiempo [mm:ss.xx], para que se resalte línea por línea como en Spotify) o .txt con el mismo nombre que la canción.";
+    showLyricsEmptyState(
+      "Sin letra disponible",
+      "Sube un archivo .lrc (con marcas [mm:ss.xx] para que se resalte línea por línea) o .txt con el mismo nombre que la canción."
+    );
     return;
   }
 
-  el.textContent = "Cargando letra…";
+  el.classList.remove("synced");
+  el.innerHTML = `<div class="np-lyrics-empty"><i class="ri-file-text-line"></i><p>Cargando letra…</p></div>`;
   try {
     const res = await fetch(track.lyricsUrl);
     if (!res.ok) throw new Error();
@@ -461,7 +486,7 @@ async function loadLyricsForTrack(track) {
     }
   } catch (e) {
     if (currentTrack() && currentTrack().id === track.id) {
-      el.textContent = "No se pudo cargar el archivo de letra.";
+      showLyricsEmptyState("No se pudo cargar el archivo de letra.");
     }
   }
 }
